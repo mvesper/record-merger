@@ -1,0 +1,22 @@
+<record>
+	<controlfield tag="001">1000</controlfield>
+	<controlfield tag="005">Lets change this</controlfield>
+	<datafield tag="024" ind1="7" ind2=" ">
+		<subfield code="2">DOI</subfield>
+		<subfield code="a">10.1007/JHEP01(2014)092</subfield>
+	</datafield>
+	<datafield tag="037" ind1=" " ind2=" ">
+		<subfield code="9">arXiv</subfield>
+		<subfield code="a">arXiv:1308.1634</subfield>
+	</datafield>
+	<datafield tag="100" ind1=" " ind2=" ">
+		<subfield code="a">Granados, C.</subfield>
+		<subfield code="v">
+			Theory, Center, Jefferson, Lab, Newport, News, VA, 23606, U.S.A.
+		</subfield>
+		<subfield code="v">
+			Department, of, Physics, and, Astronomy,, Nuclear, Physics, Uppsala, University, Box, 516, 75120, Uppsala, Sweden
+		</subfield>
+		<subfield code="w">HUMAN CHECK</subfield>
+	</datafield>
+</record>
