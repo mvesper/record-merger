@@ -3,6 +3,17 @@ from patch_extractor.list_patch_extractor import ListPatchExtractor
 
 from patch_extractor.patcher import patchit 
 
+class Test():
+    pass
+
+a = Test()
+a.change = 'foo'
+a.remove = 'del'
+
+b = Test()
+b.change = 'bar'
+b.add = 'wuhu'
+
 
 old = {'a': 'This is a string that is going to change',
        'b': [1, 2, 3],      # Let's insert something here
@@ -12,7 +23,8 @@ old = {'a': 'This is a string that is going to change',
        'f': 'remove me',    # This is going to be removed
        'changethis': {'a':1, 'b':[1,2]},
        'listtest':[1, 2, 3, 4],
-       'nested':[{'a': 1}, {'b':1}]
+       'nested':[{'a': 1}, {'b':1}],
+       'object':a
        }
 new = {'a': 'And now this string changed',
        'b': [1, 2, 3, 4],   # Let's insert something here
@@ -23,7 +35,8 @@ new = {'a': 'And now this string changed',
        'insertthis': {'a':1, 'b': [1,2]},
        'changethis': {'a':2, 'b': [1]},
        'listtest':[-1, 0, 1, 2, 4, 5, 6],
-       'nested':[{'a': 1}, {'b':2}]
+       'nested':[{'a': 1}, {'b':2}],
+       'object':b
        }
 
 extractor = DictPatchExtractor(old, new, patch_extractors=[DictPatchExtractor, ListPatchExtractor])
@@ -60,3 +73,11 @@ e1 = ListPatchExtractor(old, new2, patch_extractors=[ListPatchExtractor])
 for p in e.patches:
     merge_list_patch(p, e.patches, e1.patches, None, None, None, [])
 '''
+
+
+old = [1,2,3,4,5]
+new = [2,3,6,7,4,8,9]
+
+
+old = {'a':{'c':1}, 'b':2}
+new = {'d':{'c':1}, 'b':2}
