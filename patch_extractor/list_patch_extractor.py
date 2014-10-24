@@ -1,77 +1,62 @@
 from itertools import izip_longest
-from copy import deepcopy
-
 from difflib import SequenceMatcher
 
+from base_patch_extractor import BasePatchExtractor
 
-class ListPatchExtractor:
+
+class ListPatchExtractor(BasePatchExtractor):
     def __init__(self,
                  old_obj, new_obj,
                  previous_path=(), previous_new_path=(),
-                 patch_extractors=[]):
-        self.patches = []
+                 patch_extractors=[],
+                 find_moved_patches=False,
+                 moved_patches_similarity=0.8):
+
+        super(ListPatchExtractor, self).__init__(old_obj, new_obj,
+                                                 previous_path,
+                                                 previous_new_path,
+                                                 patch_extractors,
+                                                 moved_patches_similarity)
+
         sequence = SequenceMatcher(None, self.make_hashable(old_obj),
                                    self.make_hashable(new_obj))
+
+        group = 0
 
         for _tuple in sequence.get_opcodes():
             if _tuple[0] == 'insert':
                 for i, new_path in enumerate(range(_tuple[3], _tuple[4])):
-                    action = 'add'
-                    path = previous_path + (_tuple[1]+i,)
-                    value = deepcopy(new_obj[new_path])
-                    self.patches.append((action, path, value))
+                    self._add_patch('add', _tuple[1]+i, new_obj[new_path], group=group)
 
             elif _tuple[0] == 'replace':
                 old_range = range(_tuple[1], _tuple[2])
                 new_range = range(_tuple[3], _tuple[4])
-                for old_path, new_path in izip_longest(old_range, new_range):
-                    if old_path and new_path:
-                        for patch_extractor in patch_extractors:
-                            _old_obj = old_obj[old_path]
-                            _new_obj = new_obj[new_path]
-                            if patch_extractor.is_applicable(_old_obj,
-                                                             _new_obj):
-                                _new_path = previous_new_path+(new_path,),
-                                _path = previous_path+(old_path,),
-                                extractor = patch_extractor(_old_obj,
-                                                            _new_obj,
-                                                            _path,
-                                                            _new_path,
-                                                            patch_extractors)
-                                self.patches.extend(extractor.patches)
-                                break
-                        else:
-                            action = 'change'
-                            path = previous_path + (old_path,)
-                            value = (deepcopy(old_obj[old_path]),
-                                     deepcopy(new_obj[new_path]))
-                            self.patches.append((action, path, value))
-                    elif new_path:
-                        action = 'add'
-                        path = previous_path + (last_old_path+1,)
-                        value = deepcopy(new_obj[new_path])
-                        self.patches.append((action, path, value))
-                    elif old_path:
-                        action = 'remove'
-                        path = previous_path + (old_path,)
-                        value = deepcopy(old_obj[old_path])
-                        self.patches.append((action, path, value))
 
-                    if old_path:
+                for old_path, new_path in izip_longest(old_range, new_range):
+                    if old_path is not None and new_path is not None:
+                        if not self._try_patch_extractors(old_path, new_path):
+                            self._add_patch('change', old_path,
+                                            old_obj[old_path],
+                                            new_obj[new_path],
+                                            group)
+                        
                         last_old_path = old_path
-                    else:
+                    elif new_path is not None:
+                        self._add_patch('add', last_old_path+1,
+                                        new_obj[new_path], group=group)
                         last_old_path += 1
+                    elif old_path is not None:
+                        self._add_patch('remove', last_old_path+1, old_obj[old_path], group=group)
 
             elif _tuple[0] == 'delete':
                 path = _tuple[1]
                 for removal_key in range(_tuple[1], _tuple[2]):
-                    action = 'remove'
-                    path = previous_path + (path,)
-                    value = deepcopy(old_obj[removal_key])
-                    self.patches.append((action, path, value))
+                    self._add_patch('remove', path, old_obj[removal_key], group=group)
 
-            else:
-                continue
+            group += 1
+
+        if find_moved_patches:
+            self.patches = self._find_moved_parts()
 
     @classmethod
     def is_applicable(cls, old_obj, new_obj):

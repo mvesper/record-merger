@@ -1,3 +1,6 @@
+from copy import deepcopy
+
+
 def get_containing(old_obj, path):
     containing = old_obj
     for p in path[:-1]:
@@ -8,7 +11,7 @@ def get_containing(old_obj, path):
     return containing
 
 
-def add(old_obj, path, value):
+def add(old_obj, path, value, rest):
     insert_to = get_containing(old_obj, path)
 
     if isinstance(insert_to, dict):
@@ -24,7 +27,7 @@ def add(old_obj, path, value):
         raise Exception('insert_action cannot alter the old_obj...')
 
 
-def remove(old_obj, path, value):
+def remove(old_obj, path, value, rest):
     delete_from = get_containing(old_obj, path)
 
     if isinstance(delete_from, dict):
@@ -40,7 +43,7 @@ def remove(old_obj, path, value):
         raise Exception('could not delete value')
 
 
-def change(old_obj, path, value):
+def change(old_obj, path, value, rest):
     value = value[1]
     insert_to = get_containing(old_obj, path)
 
@@ -52,37 +55,52 @@ def change(old_obj, path, value):
     return 0
 
 
-def shift(patches, index, _path, _shift):
-    _action, latest_path, _ = patches[index-1]
-    consecutive = True
-    latest_path = latest_path[-1]
-    for i, (action, path, value) in enumerate(patches[index:]):
-        if _path[:-1] == path[:-1]:
-            if action == _action == 'add':
-                if not path[-1] == latest_path+1:
-                    consecutive = False
-            elif action == _action == 'remove':
-                if not path[-1] == latest_path:
-                    consecutive = False
-            else:
-                consecutive = False
+def move(old_obj, path, value, rest):
+    old_obj_actions = {'add': add, 'change': change}
+    new_obj_actions = {'remove': remove, 'dont_remove': nothing}
 
-            if not consecutive:
-                new_path = _path[:-1]+(path[-1]+_shift,)
-                patches[index+i] = (action, new_path, value)
+    old_obj_action = rest[1][1]
+    new_obj_action = rest[1][2]
 
-            latest_path = path[-1]
+    del_path = rest[1][0]
+
+    old_obj_actions[old_obj_action](old_obj, path, value, rest)
+    new_obj_actions[new_obj_action](old_obj, del_path, value, rest)
 
 
-def patch(obj, patches):
+def shift(original_patches, patches, index, _path, _shift):
+    last_group = original_patches[index-1][3]
+
+    if last_group is not None:
+        for i, (action, path, value, group) in enumerate(original_patches[index:]):
+            if _path[:-1] == path[:-1]:
+                if group != last_group:
+                    p = (patches[index+i][1][-1]+_shift,)
+                    new_path = _path[:-1]+p
+                    patches[index+i] = (action, new_path, value, group)
+
+
+def nothing(*_):
+    pass
+
+
+def unpack(action, path, value, *rest):
+    return (action, path, value, rest)
+
+
+def patch(obj, _patches):
     actions = {'add': add,
                'change': change,
-               'remove': remove}
+               'remove': remove,
+               'move': move}
 
-    for i, (action, path, value) in enumerate(patches):
-        _shift = actions[action](obj, path, value)
+    obj = deepcopy(obj)
+    patches = deepcopy(_patches)
+
+    for i, (action, path, value, rest) in enumerate(map(lambda x: unpack(*x), patches)):
+        _shift = actions[action](obj, path, value, rest)
         if _shift:
-            shift(patches, i+1, path, _shift)
+            shift(_patches, patches, i+1, path, _shift)
 
     return obj
 

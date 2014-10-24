@@ -1,45 +1,36 @@
-from copy import deepcopy
-
 from dictdiffer import DictDiffer
+from base_patch_extractor import BasePatchExtractor
 
 
-class DictPatchExtractor(object):
+class DictPatchExtractor(BasePatchExtractor):
     def __init__(self,
                  old_obj, new_obj,
                  previous_path=(), previous_new_path=(),
-                 patch_extractors=[]):
-        self.patches = []
+                 patch_extractors=[],
+                 find_moved_patches=False,
+                 moved_patches_similarity=0.8):
+
+        super(DictPatchExtractor, self).__init__(old_obj, new_obj,
+                                                 previous_path,
+                                                 previous_new_path,
+                                                 patch_extractors,
+                                                 moved_patches_similarity)
+
         dict_diff = DictDiffer(new_obj, old_obj)
 
         for addition_key in dict_diff.added():
-            action = 'add'
-            path = previous_path + (addition_key,)
-            value = deepcopy(new_obj[addition_key])
-            self.patches.append((action, path, value))
+            self._add_patch('add', addition_key, new_obj[addition_key])
 
         for removal_key in dict_diff.removed():
-            action = 'remove'
-            path = previous_path + (removal_key,)
-            value = deepcopy(old_obj[removal_key])
-            self.patches.append((action, path, value))
+            self._add_patch('remove', removal_key, old_obj[removal_key])
 
         for change_key in dict_diff.changed():
-            for patch_extractor in patch_extractors:
-                if patch_extractor.is_applicable(old_obj[change_key],
-                                                 new_obj[change_key]):
-                    extractor = patch_extractor(old_obj[change_key],
-                                                new_obj[change_key],
-                                                previous_path+(change_key,),
-                                                previous_new_path+(change_key,),
-                                                patch_extractors)
-                    self.patches.extend(extractor.patches)
-                    break
-            else:
-                action = 'change'
-                path = previous_path + (change_key,)
-                value = (deepcopy(old_obj[change_key]),
-                         deepcopy(new_obj[change_key]))
-                self.patches.append((action, path, value))
+            if not self._try_patch_extractors(change_key, change_key):
+                self._add_patch('change', change_key,
+                                old_obj[change_key], new_obj[change_key])
+
+        if find_moved_patches:
+            self.patches = self._find_moved_parts()
 
     @classmethod
     def is_applicable(cls, old_obj, new_obj):

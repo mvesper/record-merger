@@ -5,7 +5,9 @@ from list_patch_extractor import ListPatchExtractor
 
 def diff(old, new,
          extend_extractors=[],
-         ignore_extractors=[]):
+         ignore_extractors=[],
+         find_moved_patches=False,
+         moved_patches_similarity=0.8):
     extractors = [DictPatchExtractor, ListPatchExtractor, ObjectPatchExtractor]
 
     extractors.extend(extend_extractors)
@@ -15,7 +17,9 @@ def diff(old, new,
 
     for extractor in extractors:
         if extractor.is_applicable(old, new):
-            e = extractor(old, new, patch_extractors=extractors)
+            e = extractor(old, new, patch_extractors=extractors,
+                          find_moved_patches=find_moved_patches,
+                          moved_patches_similarity=moved_patches_similarity)
             return e.patches
 
     return []

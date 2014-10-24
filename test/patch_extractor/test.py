@@ -1,7 +1,7 @@
-from patch_extractor.dict_patch_extractor import DictPatchExtractor
-from patch_extractor.list_patch_extractor import ListPatchExtractor
+from pprint import pprint
 
-from patch_extractor.patcher import patchit 
+from patch_extractor.diff import diff
+from patch_extractor.patch import patch 
 
 class Test():
     pass
@@ -39,9 +39,13 @@ new = {'a': 'And now this string changed',
        'object':b
        }
 
-extractor = DictPatchExtractor(old, new, patch_extractors=[DictPatchExtractor, ListPatchExtractor])
+patches = diff(old, new)
 
-print patchit(old,  extractor.patches)
+pprint(patches)
+print
+
+patched_obj = patch(old, patches)
+pprint(patched_obj)
 
 '''
 from patch_extractor.dict_patch_extractor import DictPatchExtractor
