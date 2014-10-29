@@ -1,5 +1,6 @@
 from dictdiffer import DictDiffer
 from base_patch_extractor import BasePatchExtractor
+from utils import KeyLimit
 
 
 class DictPatchExtractor(BasePatchExtractor):
@@ -7,6 +8,7 @@ class DictPatchExtractor(BasePatchExtractor):
                  old_obj, new_obj,
                  previous_path=(), previous_new_path=(),
                  patch_extractors=[],
+                 key_limits=KeyLimit(),
                  find_moved_patches=False,
                  moved_patches_similarity=0.8):
 
@@ -14,15 +16,17 @@ class DictPatchExtractor(BasePatchExtractor):
                                                  previous_path,
                                                  previous_new_path,
                                                  patch_extractors,
+                                                 key_limits,
                                                  moved_patches_similarity)
 
         dict_diff = DictDiffer(new_obj, old_obj)
 
         for addition_key in dict_diff.added():
-            self._add_patch('add', addition_key, new_obj[addition_key])
+            if not self._try_patch_extractors_for_ungrouping(addition_key):
+                self._add_patch('add', addition_key, None, new_obj[addition_key])
 
         for removal_key in dict_diff.removed():
-            self._add_patch('remove', removal_key, old_obj[removal_key])
+            self._add_patch('remove', removal_key, old_obj[removal_key], None)
 
         for change_key in dict_diff.changed():
             if not self._try_patch_extractors(change_key, change_key):

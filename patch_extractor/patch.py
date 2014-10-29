@@ -1,6 +1,10 @@
 from copy import deepcopy
 
 
+def nothing(*_):
+    pass
+
+
 def get_containing(old_obj, path):
     containing = old_obj
     for p in path[:-1]:
@@ -11,7 +15,9 @@ def get_containing(old_obj, path):
     return containing
 
 
-def add(old_obj, path, value, rest):
+def add(old_obj, patch):
+    path = patch['path']
+    value = patch['value']['to']
     insert_to = get_containing(old_obj, path)
 
     if isinstance(insert_to, dict):
@@ -27,7 +33,8 @@ def add(old_obj, path, value, rest):
         raise Exception('insert_action cannot alter the old_obj...')
 
 
-def remove(old_obj, path, value, rest):
+def remove(old_obj, patch):
+    path = patch['path']
     delete_from = get_containing(old_obj, path)
 
     if isinstance(delete_from, dict):
@@ -43,8 +50,9 @@ def remove(old_obj, path, value, rest):
         raise Exception('could not delete value')
 
 
-def change(old_obj, path, value, rest):
-    value = value[1]
+def change(old_obj, patch):
+    path = patch['path']
+    value = patch['value']['to']
     insert_to = get_containing(old_obj, path)
 
     try:
@@ -55,52 +63,46 @@ def change(old_obj, path, value, rest):
     return 0
 
 
-def move(old_obj, path, value, rest):
-    old_obj_actions = {'add': add, 'change': change}
-    new_obj_actions = {'remove': remove, 'dont_remove': nothing}
+def move(old_obj, patch):
+    old_obj_action = patch['move']['old_action']
+    new_obj_action = patch['move']['new_action']
 
-    old_obj_action = rest[1][1]
-    new_obj_action = rest[1][2]
+    OLD_OBJ_ACTIONS[old_obj_action](old_obj, patch)
+    if patch['group'] is not None and patch['move']['old_action'] == 'add':
+        tmp_path_end = patch['move']['moved_from'][-1]+1
+    else:
+        tmp_path_end = patch['move']['moved_from'][-1]
 
-    del_path = rest[1][0]
+    tmp_patch = {'path': patch['move']['moved_from'][:-1]+(tmp_path_end,)}
 
-    old_obj_actions[old_obj_action](old_obj, path, value, rest)
-    new_obj_actions[new_obj_action](old_obj, del_path, value, rest)
+    NEW_OBJ_ACTIONS[new_obj_action](old_obj, tmp_patch)
 
 
 def shift(original_patches, patches, index, _path, _shift):
-    last_group = original_patches[index-1][3]
+    last_group = original_patches[index-1]['group']
 
     if last_group is not None:
-        for i, (action, path, value, group) in enumerate(original_patches[index:]):
-            if _path[:-1] == path[:-1]:
-                if group != last_group:
-                    p = (patches[index+i][1][-1]+_shift,)
-                    new_path = _path[:-1]+p
-                    patches[index+i] = (action, new_path, value, group)
-
-
-def nothing(*_):
-    pass
-
-
-def unpack(action, path, value, *rest):
-    return (action, path, value, rest)
+        for i, patch in enumerate(original_patches[index:]):
+            if _path[:-1] == patch['path'][:-1]:
+                if patch['group'] != last_group:
+                    patches[index+i]['path'] = patches[index+i]['path'][:-1] + (patches[index+i]['path'][-1]+_shift,)
 
 
 def patch(obj, _patches):
-    actions = {'add': add,
-               'change': change,
-               'remove': remove,
-               'move': move}
-
     obj = deepcopy(obj)
     patches = deepcopy(_patches)
 
-    for i, (action, path, value, rest) in enumerate(map(lambda x: unpack(*x), patches)):
-        _shift = actions[action](obj, path, value, rest)
+    for i, patch in enumerate(patches):
+        _shift = ACTIONS[patch['action']](obj, patch)
         if _shift:
-            shift(_patches, patches, i+1, path, _shift)
+            shift(_patches, patches, i+1, patch['path'], _shift)
 
     return obj
 
+
+ACTIONS = {'add': add,
+           'change': change,
+           'remove': remove,
+           'move': move}
+OLD_OBJ_ACTIONS = {'add': add, 'change': change}
+NEW_OBJ_ACTIONS = {'remove': remove, 'dont_remove': nothing}

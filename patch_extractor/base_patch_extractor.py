@@ -3,12 +3,15 @@ from copy import deepcopy
 from json import dumps
 from difflib import SequenceMatcher
 
+from utils import KeyLimit
+
 
 class BasePatchExtractor(object):
     def __init__(self,
                  old_obj, new_obj,
                  previous_old_path=(), previous_new_path=(),
                  patch_extractors=[],
+                 key_limits=KeyLimit(),
                  moved_patches_similarity=0.8):
         self.patches = []
         self.old_obj = old_obj
@@ -16,17 +19,25 @@ class BasePatchExtractor(object):
         self.previous_old_path = previous_old_path
         self.previous_new_path = previous_new_path
         self.patch_extractors = patch_extractors
+        self.key_limits = key_limits
         self.similarity = moved_patches_similarity
 
-    def _add_patch(self, action, path, value, to_value=None, group=None):
-        _path = self.previous_old_path + (path,)
-        if action == 'change':
-            _value = (deepcopy(value), deepcopy(to_value))
-        else:
-            _value = deepcopy(value)
-        self.patches.append((action, _path, _value, group))
+    def _add_patch(self, action, path, from_value, to_value, group=None):
+        patch = self._create_patch(action, path, from_value, to_value, group)
+        self.patches.append(patch)
+
+    def _create_patch(self, action, path, from_value, to_value, group=None):
+        patch = {'action': action,
+                 'path': self.previous_old_path + (path,),
+                 'value': {'from': from_value, 'to': to_value},
+                 'group': group}
+
+        return patch
 
     def _try_patch_extractors(self, old_key, new_key):
+        if self.key_limits.key_is_limit(self.previous_old_path+(old_key,)):
+            return False
+
         for patch_extractor in self.patch_extractors:
             if patch_extractor.is_applicable(self.old_obj[old_key],
                                              self.new_obj[new_key]):
@@ -34,13 +45,36 @@ class BasePatchExtractor(object):
                                             self.new_obj[new_key],
                                             self.previous_old_path+(old_key,),
                                             self.previous_new_path+(new_key,),
-                                            self.patch_extractors)
+                                            self.patch_extractors,
+                                            self.key_limits)
                 self.patches.extend(extractor.patches)
 
                 return True
 
         return False
 
+    def _try_patch_extractors_for_ungrouping(self, key, group=None):
+        if self.key_limits.key_is_limit(self.previous_old_path+(key,)):
+            return False
+
+        new_obj = self.new_obj[key]
+        old_obj = new_obj.__class__()
+        for patch_extractor in self.patch_extractors:
+            if patch_extractor.is_applicable(old_obj, new_obj):
+                extractor = patch_extractor(old_obj,
+                                            new_obj,
+                                            self.previous_old_path+(key,),
+                                            self.previous_new_path+(key,),
+                                            self.patch_extractors,
+                                            self.key_limits)
+                self.patches.append(self._create_patch('add', key, None, old_obj, group))
+                self.patches.extend(extractor.patches)
+
+                return True
+
+        return False
+
+    # MOVED PART
     def _stringify(self, var):
         try:
             return dumps(var)
@@ -52,17 +86,16 @@ class BasePatchExtractor(object):
         val2 = self._stringify(value2)
         s = SequenceMatcher(None, val1, val2)
         return s.ratio()
-
-    def _create_move_patch(self, patches, patch1, patch2, i, j,
-                           comp_val1, comp_val2, action1, action2):
+    
+    def _create_move_patch(self, patch1, patch2, comp_val1, comp_val2, action1, action2):
         _similarity = self._estimate_similarity(comp_val1, comp_val2)
         if _similarity > self.similarity:
-            patches[i] = ('move',
-                          patch1[1],
-                          patch1[2],
-                          patch1[3],
-                          (patch2[1], action1, action2))
-            patches[j] = ('cleared',)
+            patch1['action'] = 'move'
+            patch1['move'] = {'moved_from': patch2['path'],
+                              'old_action': action1,
+                              'new_action': action2}
+            patch2['cleared'] = 1
+
 
     def _find_moved_parts(self):
         patches = self.patches[:]
@@ -71,44 +104,43 @@ class BasePatchExtractor(object):
                 if patch1 == patch2:
                     continue
 
-                if patch1[0] == 'move' or patch2[0] == 'move':
+                if patch1['action'] == 'move' or patch2['action'] == 'move':
                     continue
 
-                if patch1[0] == 'cleared' or patch2[0] == 'cleared':
+                if 'cleared' in patch1 or 'cleared' in patch2:
                     continue
 
-                if patch1[0] == patch2[0] == 'remove':
+                if patch1['action'] == patch2['action'] == 'remove':
                     continue
 
-                if patch1[0] == patch2[0] == 'add':
+                if patch1['action'] == patch2['action'] == 'add':
                     continue
 
-                if patch1[0] == 'add' and patch2[0] == 'remove':
-                    self._create_move_patch(patches, patch1, patch2, i, j, patch1[2], patch2[2], 'add', 'remove')
+                if patch1['action'] == 'add' and patch2['action'] == 'remove':
+                    self._create_move_patch(patch1, patch2, patch1['value']['to'], patch2['value']['from'], 'add', 'remove')
 
-                if patch1[0] == 'remove' and patch2[0] == 'add':
-                    self._create_move_patch(patches, patch2, patch1, j, i, patch2[2], patch1[2], 'add', 'remove')
+                if patch1['action'] == 'remove' and patch2['action'] == 'add':
+                    self._create_move_patch(patch2, patch1, patch2['value']['to'], patch1['value']['from'], 'add', 'remove')
 
-                if patch1[0] == 'change' and patch2[0] == 'remove':
-                    self._create_move_patch(patches, patch1, patch2, i, j, patch1[2][1], patch2[2], 'change', 'remove')
+                if patch1['action'] == 'change' and patch2['action'] == 'remove':
+                    self._create_move_patch(patch1, patch2, patch1['value']['to'], patch2['value']['from'], 'change', 'remove')
 
-                if patch1[0] == 'remove' and patch2[0] == 'change':
-                    self._create_move_patch(patches, patch2, patch1, j, i, patch2[2][1], patch1[2], 'change', 'remove')
+                if patch1['action'] == 'remove' and patch2['action'] == 'change':
+                    self._create_move_patch(patch2, patch1, patch2['value']['to'], patch1['value']['from'], 'change', 'remove')
 
-                if patch2[0] == 'change' and patch1[0] == 'change':
-                    _similarity1 = self._estimate_similarity(patch1[2][0], patch2[2][1])
-                    _similarity2 = self._estimate_similarity(patch1[2][1], patch2[2][0])
+                if patch2['action'] == 'change' and patch1['action'] == 'change':
+                    _similarity1 = self._estimate_similarity(patch1['value']['from'], patch2['value']['to'])
+                    _similarity2 = self._estimate_similarity(patch1['value']['to'], patch2['value']['from'])
                     if _similarity1 > self.similarity and _similarity2 > self.similarity:
-                        patches[i] = ('move',
-                                      patch1[1],
-                                      patch1[2],
-                                      patch1[3],
-                                      (patch2[1], 'change', 'dont_remove'))
-                        patches[j] = ('move',
-                                      patch2[1],
-                                      patch2[2],
-                                      patch2[3],
-                                      (patch1[1], 'change', 'dont_remove'))
+                        patch1['action'] = 'move'
+                        patch1['move'] = {'moved_from': patch2['path'],
+                                          'old_action': 'change',
+                                          'new_action': 'dont_remove'}
 
-                return filter(lambda x: x[0] != 'cleared', patches)
+                        patch2['action'] = 'move'
+                        patch2['move'] = {'moved_from': patch1['path'],
+                                          'old_action': 'change',
+                                          'new_action': 'dont_remove'}
+
+                return filter(lambda x: 'cleared' not in x, patches)
                 

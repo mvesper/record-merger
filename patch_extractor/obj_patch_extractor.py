@@ -1,6 +1,7 @@
 from types import InstanceType
 
 from dict_patch_extractor import DictPatchExtractor
+from utils import KeyLimit
 
 
 class ObjectPatchExtractor(DictPatchExtractor):
@@ -8,6 +9,7 @@ class ObjectPatchExtractor(DictPatchExtractor):
                  old_obj, new_obj,
                  previous_path=(), previous_new_path=(),
                  patch_extractors=[],
+                 key_limits=KeyLimit(),
                  find_moved_patches=False,
                  moved_patches_similarity=0.8):
 
@@ -18,6 +20,7 @@ class ObjectPatchExtractor(DictPatchExtractor):
                                                    previous_path,
                                                    previous_new_path,
                                                    patch_extractors,
+                                                   key_limits,
                                                    find_moved_patches,
                                                    moved_patches_similarity)
 

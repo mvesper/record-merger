@@ -2,6 +2,7 @@ from itertools import izip_longest
 from difflib import SequenceMatcher
 
 from base_patch_extractor import BasePatchExtractor
+from utils import KeyLimit
 
 
 class ListPatchExtractor(BasePatchExtractor):
@@ -9,6 +10,7 @@ class ListPatchExtractor(BasePatchExtractor):
                  old_obj, new_obj,
                  previous_path=(), previous_new_path=(),
                  patch_extractors=[],
+                 key_limits=KeyLimit(),
                  find_moved_patches=False,
                  moved_patches_similarity=0.8):
 
@@ -16,6 +18,7 @@ class ListPatchExtractor(BasePatchExtractor):
                                                  previous_path,
                                                  previous_new_path,
                                                  patch_extractors,
+                                                 key_limits,
                                                  moved_patches_similarity)
 
         sequence = SequenceMatcher(None, self.make_hashable(old_obj),
@@ -26,7 +29,8 @@ class ListPatchExtractor(BasePatchExtractor):
         for _tuple in sequence.get_opcodes():
             if _tuple[0] == 'insert':
                 for i, new_path in enumerate(range(_tuple[3], _tuple[4])):
-                    self._add_patch('add', _tuple[1]+i, new_obj[new_path], group=group)
+                    if not self._try_patch_extractors_for_ungrouping(_tuple[1]+i):
+                        self._add_patch('add', _tuple[1]+i, None, new_obj[new_path], group)
 
             elif _tuple[0] == 'replace':
                 old_range = range(_tuple[1], _tuple[2])
@@ -42,16 +46,17 @@ class ListPatchExtractor(BasePatchExtractor):
                         
                         last_old_path = old_path
                     elif new_path is not None:
-                        self._add_patch('add', last_old_path+1,
-                                        new_obj[new_path], group=group)
+                        if not self._try_patch_extractors_for_ungrouping(last_old_path+1):
+                            self._add_patch('add', last_old_path+1, None,
+                                            new_obj[new_path], group)
                         last_old_path += 1
                     elif old_path is not None:
-                        self._add_patch('remove', last_old_path+1, old_obj[old_path], group=group)
+                        self._add_patch('remove', last_old_path+1, old_obj[old_path], None, group)
 
             elif _tuple[0] == 'delete':
                 path = _tuple[1]
                 for removal_key in range(_tuple[1], _tuple[2]):
-                    self._add_patch('remove', path, old_obj[removal_key], group=group)
+                    self._add_patch('remove', path, old_obj[removal_key], None, group)
 
             group += 1
 

@@ -46,3 +46,4 @@ class WildcardDict(dict):
 def get_filenames_from_directory(dirname, _filter=''):
     return [join(dirname, f) for f in listdir(dirname)
             if isfile(join(dirname, f)) and _filter in f]
+
