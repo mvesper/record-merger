@@ -1,4 +1,4 @@
-from types import InstanceType
+import types as t
 
 from dict_patch_extractor import DictPatchExtractor
 from utils import KeyLimit
@@ -26,8 +26,9 @@ class ObjectPatchExtractor(DictPatchExtractor):
 
     @classmethod
     def is_applicable(cls, old_obj, new_obj):
+        types = t.__getattribute__('__builtins__').values() 
         return (isinstance(new_obj, object) and
                 isinstance(old_obj, object) and
-                type(new_obj) is InstanceType and
-                type(old_obj) is InstanceType)
+                type(new_obj) not in types and
+                type(old_obj) not in types)
 

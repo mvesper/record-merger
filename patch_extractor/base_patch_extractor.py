@@ -77,9 +77,9 @@ class BasePatchExtractor(object):
     # MOVED PART
     def _stringify(self, var):
         try:
-            return dumps(var)
+            return dumps(var, sort_keys=True)
         except TypeError:
-            return dumps(var.__dict__)
+            return dumps(var.__dict__, sort_keys=True)
 
     def _estimate_similarity(self, value1, value2):
         val1 = self._stringify(value1)

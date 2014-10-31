@@ -85,7 +85,9 @@ def shift(original_patches, patches, index, _path, _shift):
         for i, patch in enumerate(original_patches[index:]):
             if _path[:-1] == patch['path'][:-1]:
                 if patch['group'] != last_group:
-                    patches[index+i]['path'] = patches[index+i]['path'][:-1] + (patches[index+i]['path'][-1]+_shift,)
+                    if patches[index+i]['path'][-1] > patches[index]['path'][-1]
+                        # This way the order of groups is not important
+                        patches[index+i]['path'] = patches[index+i]['path'][:-1] + (patches[index+i]['path'][-1]+_shift,)
 
 
 def patch(obj, _patches):
