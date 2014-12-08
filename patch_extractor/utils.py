@@ -30,7 +30,7 @@ class KeyLimit(object):
         return containing.get(self.final_key, False)
 
 
-def printPatches(patches):
+def print_patches(patches):
     fields = ['ACTION', 'PATH', 'GROUP', 'VALUE', 'MOVE']
     pt = PrettyTable(['NUMBER'] + fields)
 
@@ -38,4 +38,24 @@ def printPatches(patches):
         pt.add_row([i]+[patch.get(x.lower()) for x in fields])
 
     print pt
+
+
+def delete_patch_at_index(index, patches, alter_group=True):
+    removed_patch = patches.pop(index)
+
+    if alter_group:
+        if removed_patch['group'] is None:
+            return
+
+        if removed_patch['action'] != 'insert':
+            return
+        else:
+            for patch in patches[index:]:
+                if patch['group'] == removed_patch['group']:
+                    patch['path'] = patch['path'][:-1] + (patch['path'][-1]-1,)
+
+
+def delete_patch(patch, patches, alter_group=True):
+    index = patches.index(patch)
+    delete_patch_at_index(index, patches, alter_group)
 

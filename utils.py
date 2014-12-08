@@ -7,10 +7,14 @@ class WildcardDict(dict):
     *:  wildcard for everything that follows
     +:  wildcard for anything on the same path level
     '''
-    def __init__(self):
+    def __init__(self, values=None):
         super(WildcardDict, self).__init__()
         self.star_keys = set()
         self.plus_keys = set()
+
+        if values is not None:
+            for key, value in values.iteritems():
+                self.__setitem__(key, value)
 
     def __getitem__(self, key):
         try:
